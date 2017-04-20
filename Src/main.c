@@ -66,6 +66,39 @@ static void MX_ADC_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
+//random PID FPS control implementation just for shits and giggles
+//the ball should hit one wall about every second
+uint32_t lastTime, lastFpsTime, delayFps = 0;
+uint16_t fps = 500, sampleTime=250, targetFps = 125, outMax = 10000, outMin = 0;
+double lastInput, ITerm;
+int kp = -10;
+int ki = -3;
+int kd = -5;
+
+void calcPID(double input){
+  uint32_t now = HAL_GetTick();
+  uint32_t deltaT = now - lastTime;
+  if(deltaT > sampleTime){
+    double error = targetFps - input;
+    ITerm+= (ki * sampleTime / 1000.0 * error);
+    if(ITerm > outMax) ITerm= outMax;
+    else if(ITerm < outMin) ITerm= outMin;
+    double dInput = (input - lastInput);
+    delayFps = kp * error + ITerm- kd  / sampleTime / 1000 * dInput;
+    if(delayFps > outMax) delayFps = outMax;
+    else if(delayFps < outMin) delayFps = outMin;
+    lastTime = HAL_GetTick();
+  }
+}
+
+void initPID(){
+  ITerm = delayFps;
+  lastInput = fps;
+  if(ITerm > outMax) ITerm = outMax;
+  else if(ITerm < outMin) ITerm = outMin;
+  lastTime = HAL_GetTick() - sampleTime;
+}
+
 
 /* USER CODE END PFP */
 
@@ -105,6 +138,7 @@ int main(void)
   
   
   display.begin();
+  delay(500);
   display.display();
   display.stopscroll();
   delay(1000);
@@ -126,11 +160,11 @@ int main(void)
   }
   delay(1000);
   
-  for(int i=0;i<128+40;i++){
+  for(int i=0;i<128+64;i++){
     if(i<128)
       display.drawFastPixel(i,sinY[i]);
-    if(i>=40)
-      display.drawFastPixel(i-40,sinY[i-40], BLACK);
+    if(i>=64)
+      display.drawFastPixel(i-64,sinY[i-64], BLACK);
     delay(5);
   }
   delay(1000);
@@ -200,31 +234,36 @@ int main(void)
     delay(delayFrame);
   }
   
+  initPID();
+  lastFpsTime = HAL_GetTick();
+  
   while (1)
   {
     int marginX, marginY;
     marginX = circleX + directionX + directionX*circleR;
     marginY = circleY + directionY + directionY*circleR;
-    display.fillFastCircle(circleX, circleY, circleR, BLACK);
     
-    if(skipDelay == 0 && hitCount >= 50){
-      hitCount = 0;
-      skipDelay = 1;
-    }
-    if(skipDelay && hitCount >= 50){
-      hitCount = 0;
-      skipDelay = 0;
-    }
+    for(int i=0;i<=delayFps;i++)
+      const int gretfd = rand()%1000+1000;
+    display.fillFastCircle(circleX, circleY, circleR, BLACK);
+//    if(skipDelay == 0 && hitCount >= 50){
+//      hitCount = 0;
+//      skipDelay = 1;
+//    }
+//    if(skipDelay && hitCount >= 50){
+//      hitCount = 0;
+//      skipDelay = 0;
+//    }
     
     if(marginX == 0 || marginX == 127){
       directionX *= -1;
       fill = !fill;
-      hitCount++;
+//      hitCount++;
     }
     if(marginY == 0 || marginY == 31){
       directionY *= -1;
       fill = !fill;
-      hitCount++;
+//      hitCount++;
     }
     circleX += directionX;
     if(divideY > divThreshold){
@@ -239,7 +278,10 @@ int main(void)
       display.fillFastCircle(circleX, circleY, circleR, WHITE);
     else
       display.drawFastCircle(circleX, circleY, circleR, WHITE);
-    delay(ballDelay - ballDelay * skipDelay);
+//    delay(ballDelay - ballDelay * skipDelay);
+    fps = 1000 / (HAL_GetTick() - lastFpsTime);
+    lastFpsTime = HAL_GetTick();
+    calcPID(fps);
     
     /* USER CODE END WHILE */
     
